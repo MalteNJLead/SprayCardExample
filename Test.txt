@@ -1,0 +1,50 @@
+
+SprayCard Math
+
+overLap 0.66 
+width 	0.09
+height = 0.15
+
+offset = 0.0306
+nrOfLines = 0.2094
+
+0.0	->Line
+0.0306	->Line
+0.0612	->Line
+0.0918	->Line
+0.1224	->Line
+0.1530	->Line
+0.1836	->Line
+0.2142	-> No Line
+0.2448 	-> No Line
+7 total lines.
+
+
+width = 0.15
+overLap 0.66 
+height = 0.15
+
+offset = 0.051
+nrOfLines = 0.249
+
+0.0	->Line
+0.051	->Line
+0.102	->Line
+0.1525	->Line
+0.203	->Line
+0.2535	-> No Line
+5 total lines.
+
+width = 0.15
+overlap = 0.5
+height = 0.15
+
+offset = 0.075
+nrOfLines = 0.225
+
+0.0	->Line
+0.075	->Line
+0.150	->Line
+0.225	-> No Line
+0.300	-> No Line
+3 total lines.

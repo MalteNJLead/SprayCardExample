@@ -1,0 +1,152 @@
+--[[
+Aubo I3 robot script for spraypainting of test cards. Developed by LeadRobotics and BöllTek.
+read the exampleProjectOverview for a description of the project.
+
+--]]
+
+----------------- Requires ------------------------------
+require("string")  	-- Aubo library that allows for additonal string manipulation
+require("math")		-- Aubo library with additional math functions 
+-- Path to the folder containing additional lua files 'commonLib.aubo' og 'cardspray.abuo'.
+-- The path is set so it matches the script folder on an AuboRobot. Files located here can be opened from AUBOPE script menu. 
+package.path = package.path .. ";/root/AuboRobotWorkSpace/teachpendant/share/teachpendant/script/?.aubo"
+require("defaultGlobalVariables")
+require("commonLib")
+
+-- Definition of runup. Runup is used to accurately target the card. To waste as little paint as possible the spraygun is only activated 
+-- after the robot is in motion. Runup is the distance the robot is moving before the sprayGun is activated.
+-- Runup is split into two parts. There is a distance required to accelerate the robot to full speed, and a distance that accounts for the delay between activation of the 
+-- sprayGun and the paint hitting the card.
+gRunupAccTime = 0.01
+gRunupAirtime = 0.03
+
+-- These values are pulled from variables in AUBOPE. The variables can be changed in the UI making it easy to adjust the parameters of the program.
+gSprayWidth = get_global_variable("V_D_sprayWidth")
+gSubjectHeight = get_global_variable("V_D_cardHeight")
+gOverlap = get_global_variable("V_D_sprayOverlap")
+
+-- We know the sprayGun is set on output0. A dictionary is used to make the program more flexible if the outputchannel is changed. 
+-- This is perhaps not particularly important in this example but in other projects this flexibility might be very useful.  
+gOutput = {
+    spray = "U_DO_00"
+}
+
+-- creation of a new speedSetting. It again uses a variable from AUBOPE UI. 
+gSpeedSettings["paint"] = {jointAcc = {1, 1, 1, 1, 1 ,1}, jointVel = {0.5, 0.5, 0.5, 1, 1, 1}, TCPAcc = 6, TCPVel = get_global_variable("V_D_paintSpeed")}
+
+-- Definition of the offset we are going to use between passes of the card. 
+-- The idea is to learn the poses for the first horizontal pass and then offset these position for subsequent passes.  
+gOffsets["cardOffset"] = {false, {0,-0.05,0},{1,0,0,0}, "sprayGun"} -- 150mm card in 4 passes 150/3 = 50
+
+
+function main()
+	-- main function that paints the card. Is called at the bootom of script
+
+	--Place robot in node system
+	setRobotInIdleNode()
+
+	-- move to approachposition
+	movePath("sprayApproach")
+
+	-- paint required Lines
+	paintCard()
+
+	-- move back to idle
+	movePath("idle")
+end
+
+function paintCard()
+	-- The start and endPose for the first movement pass over the card must be saved in AUBOPE. This makes it possible to adjust the paintjob from the UI
+	-- The poses should point the TCP so it has the right distanc to the card. they should be some safety distance to the left and right of the card to make sure the card is 
+	-- covered. They should account for the overlap. 
+    local originalEndPose = get_global_variable("V_P_sprayEnd")
+    local originalStartPose = get_global_variable("V_P_sprayStart")
+	local directionInv = 1 --To avoid an inactive pass where the spraygun is not activated we shift the direction of the pass after each pass.
+	-- Calculation of vertical offset between each pass
+	local prLineOffset = gSprayWidth * (1-gOverlap)
+	-- calculation of how many passes are required to cover the card
+	local nrOfLines = gSubjectHeight + (gOverlap*gSprayWidth)
+
+	init_global_move_profile()
+	for i = 0, nrOfLines, prLineOffset do	-- Loop for every line. 
+		if directionInv == 1 then	-- Check which direction we should paint the line in. We will alternate back and forth. 1 is start to end, -1 is end to start
+			move(startPose, "line", "slow", true) --Move to start of new line
+			moveRunup(endPose, gRunupAccTime, gRunupAirtime, startSpray, endSpray, "paint", "sprayGun") --Move while activating the sprayfunction while accounting for runup. 
+		elseif directionInv == -1 then
+			move(endPose, "line", "slow", true)		-- Move to start of new line. This is in the opposite direction of course so the start is endPose. 
+			moveRunup(startPose, gRunupAccTime, gRunupAirtime, startSpray, endSpray, "paint", "sprayGun")
+		end
+		directionInv = directionInv * -1 -- Swap the direction in which we paint the stripe for next loop iteration.7
+		-- adjust the start and endpose so it creates the desired overlap. 
+		gOffsets["spray"][1] = 
+
+	end
+end
+
+function startSpray()
+	-- Function that will start the sprayGun
+    print("Starting spray gun")
+    set_robot_io_status(RobotIOType.RobotBoardUserDO, gOutput["spray"], 1)
+end
+
+function endSpray()
+	-- Function to stop the sprayGun
+    print("Stopping spray gun")
+    set_robot_io_status(RobotIOType.RobotBoardUserDO, gOutput["spray"], 0)
+end
+
+
+-- Start- and endpose of the first pass across the card should be defined in variables in AUBOPE
+
+function createPoses(startPose, endPose, tool)
+	-- This function creates the first two 
+	print("original poses")
+	printTable(startPose)
+	printTable(endPose)
+	local listOfPoses = {}
+	local newStartPose = {}
+	local newEndPose = {}
+	local toolKin = gTools[tool]["kin"][1]
+	local toolOri = gTools[tool]["kin"][2]
+	local startPos, startOri = base_to_user(startPose, toolKin, toolOri)
+	local endPos, endOri = base_to_user(endPose, toolKin, toolOri)
+	print("startPos og endPos")
+	printTable(startPos)
+	printTable(endPos)
+	local newStartPos = startPos
+	local newEndPos = endPos
+	local prLineOffset = gSprayWidth * (1-gOverlap)
+	local nrOfLines = gSubjectHeight + (gOverlap*gSprayWidth)
+	print("prLine and nrOfLines")
+	print(prLineOffset)
+	print(nrOfLines)
+	for i = 0, nrOfLines, prLineOffset do
+		print("new start and end poses")
+		printTable(newStartPos)
+		printTable(newEndPos)
+		newStartPose = get_target_pose(startPose, newStartPos, startOri, false, toolKin, toolOri) 
+		newEndPose = get_target_pose(startPose, newEndPos, endOri, false, toolKin, toolOri) 
+		local posePair = {startPose = newStartPose, endPose = newEndPose}
+		table.insert(listOfPoses, posePair)
+		newStartPos[3] = newStartPos[3] - prLineOffset
+		newEndPos[3] = newEndPos[3] - prLineOffset
+	end
+	print("Number of passes: " .. tostring(#listOfPoses))
+	return listOfPoses
+end
+
+function paintCard()
+    local endPose = get_global_variable("V_P_sprayEnd")
+    local startPose = get_global_variable("V_P_sprayStart")
+	init_global_move_profile()
+	listOfPoses = createPoses(startPose, endPose, "sprayGun")
+	directionInv = 1
+	for i=1, #listOfPoses do 
+		if directionInv == 1 then
+    		moveRunup(listOfPoses[i]["endPose"], gRunupAccTime, gRunupAirtime, startSpray, endSpray, "paint", "sprayGun", listOfPoses[i]["startPose"])
+		elseif directionInv == -1 then
+    		moveRunup(listOfPoses[i]["startPose"], gRunupAccTime, gRunupAirtime, startSpray, endSpray, "paint", "sprayGun", listOfPoses[i]["endPose"])
+		end
+		directionInv = directionInv * -1
+	end
+end
